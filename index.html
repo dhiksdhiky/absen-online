@@ -57,7 +57,13 @@
                             <p class="font-semibold">Memeriksa Jarak...</p>
                         </div>
                     </div>
-                     <button id="refreshLocationBtn" class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Refresh Lokasi</button>
+                     <!-- **PERBAIKAN UI**: Tombol dibungkus dalam div dengan `space-y-2` -->
+                     <div class="mt-4 space-y-2">
+                         <button id="refreshLocationBtn" class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Refresh Lokasi</button>
+                         <a href="./admin.html" id="admin-link-btn" class="hidden w-full text-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300 block">
+                            Akses Admin Dashboard
+                         </a>
+                     </div>
                 </div>
                 <!-- Aksi Absensi -->
                 <div class="bg-white p-5 rounded-xl shadow-md border border-gray-200">
@@ -112,9 +118,6 @@
         import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // ===================================================================================
-        // TODO: GANTI DENGAN KONFIGURASI FIREBASE ANDA
-        // ===================================================================================
         const firebaseConfig = {
             apiKey: "AIzaSyD4kZwlKC8oe1CPZ0ZveSBZK3Xjuv8qdfM",
             authDomain: "absensi-online-de559.firebaseapp.com",
@@ -125,16 +128,14 @@
             measurementId: "G-R81MPVMN5F"
         };
 
-        // ===================================================================================
-        // PENGATURAN GEOFENCING
-        // Ganti dengan koordinat lokasi kantor/area absensi Anda.
-        // Anda bisa mendapatkan koordinat dari Google Maps.
-        // ===================================================================================
-        const OFFICE_LATITUDE = -6.264604376486193; // Contoh: Monas, Jakarta
-        const OFFICE_LONGITUDE = 106.73362422560874; // Contoh: Monas, Jakarta
-        const MAX_DISTANCE_METERS = 100; // Radius maksimal dalam meter
+        const OFFICE_LATITUDE = -6.264582427469875;
+        const OFFICE_LONGITUDE = 106.7336501596857; 
+        const MAX_DISTANCE_METERS = 30;
+        const ADMIN_UIDS = [
+            "66WLmk7CBMaRnUBp0BCpLgZscj83",
+            "6xsgaIwJ92WcWwkd4bbNRvxTv1G2"
+        ];
 
-        // --- Elemen DOM ---
         const loaderScreen = document.getElementById('loader-screen');
         const loaderText = document.getElementById('loader-text');
         const mainApp = document.getElementById('app');
@@ -146,6 +147,7 @@
         const statusMessage = document.getElementById('statusMessage');
         const historyTableBody = document.getElementById('historyTableBody');
         const refreshLocationBtn = document.getElementById('refreshLocationBtn');
+        const adminLinkBtn = document.getElementById('admin-link-btn'); 
         const messageModal = document.getElementById('messageModal');
         const modalMessage = document.getElementById('modalMessage');
         const closeModalBtn = document.getElementById('closeModalBtn');
@@ -170,20 +172,15 @@
                 messageModal.classList.remove('hidden');
             }
 
-            // Fungsi untuk menghitung jarak antara dua titik koordinat (Haversine formula)
             function calculateDistance(lat1, lon1, lat2, lon2) {
-                const R = 6371e3; // Radius bumi dalam meter
+                const R = 6371e3; 
                 const φ1 = lat1 * Math.PI/180;
                 const φ2 = lat2 * Math.PI/180;
                 const Δφ = (lat2-lat1) * Math.PI/180;
                 const Δλ = (lon2-lon1) * Math.PI/180;
-
-                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-                          Math.cos(φ1) * Math.cos(φ2) *
-                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
                 const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-                return R * c; // dalam meter
+                return R * c;
             }
             
             function checkGeofence() {
@@ -193,12 +190,7 @@
                     updateAttendanceButtons();
                     return;
                 }
-
-                const distance = calculateDistance(
-                    currentLocation.latitude, currentLocation.longitude,
-                    OFFICE_LATITUDE, OFFICE_LONGITUDE
-                );
-
+                const distance = calculateDistance(currentLocation.latitude, currentLocation.longitude, OFFICE_LATITUDE, OFFICE_LONGITUDE);
                 if (distance <= MAX_DISTANCE_METERS) {
                     geofenceStatus.className = 'p-3 rounded-lg text-center bg-green-100 text-green-800';
                     geofenceStatus.innerHTML = `<p class="font-semibold">Anda berada di dalam area absensi.</p><p class="text-xs">Jarak: ${distance.toFixed(0)} meter dari kantor.</p>`;
@@ -214,16 +206,11 @@
             function updateAttendanceButtons() {
                 const canClockIn = isWithinGeofence && !todayAttendance;
                 const canClockOut = isWithinGeofence && todayAttendance && !todayAttendance.clockOutTime;
-
                 clockInBtn.disabled = !canClockIn;
                 clockOutBtn.disabled = !canClockOut;
-
                 [clockInBtn, clockOutBtn].forEach(btn => {
-                    if (btn.disabled) {
-                        btn.classList.add('disabled-btn');
-                    } else {
-                        btn.classList.remove('disabled-btn');
-                    }
+                    if (btn.disabled) { btn.classList.add('disabled-btn'); } 
+                    else { btn.classList.remove('disabled-btn'); }
                 });
             }
 
@@ -251,7 +238,6 @@
             function updateUIAfterDataFetch() {
                 const today = new Date();
                 statusMessage.textContent = `Status untuk: ${today.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
-
                 if (todayAttendance) {
                     if (todayAttendance.clockOutTime) {
                         statusMessage.innerHTML += `<br><strong class="text-green-600">Absensi hari ini sudah lengkap.</strong>`;
@@ -274,7 +260,6 @@
                  if (attendanceListener) attendanceListener(); 
                 const collectionPath = `artifacts/${appId}/users/${uid}/attendance`;
                 const q = query(collection(db, collectionPath));
-                
                 attendanceListener = onSnapshot(q, (querySnapshot) => {
                     const allAttendance = [];
                     querySnapshot.forEach((doc) => allAttendance.push({ id: doc.id, ...doc.data() }));
@@ -308,10 +293,8 @@
                 const originalText = btn.textContent;
                 btn.disabled = true;
                 btn.textContent = 'PROSES...';
-                
                 const todayDateString = new Date().toISOString().slice(0, 10);
                 const attendanceRef = doc(db, `artifacts/${appId}/users/${userId}/attendance`, todayDateString);
-                
                 try {
                     const data = {
                         userId: userId,
@@ -319,7 +302,6 @@
                         [`clock${action === 'in' ? 'In' : 'Out'}Time`]: serverTimestamp(),
                         [`clock${action === 'in' ? 'In' : 'Out'}Location`]: { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
                     };
-
                     if (action === 'in') {
                         await setDoc(attendanceRef, { ...data, clockOutTime: null, clockOutLocation: null });
                     } else {
@@ -330,7 +312,6 @@
                     showModal(`Terjadi kesalahan saat Clock ${action === 'in' ? 'In' : 'Out'}: ${error.message}`);
                 } finally {
                     btn.textContent = originalText;
-                    // Re-enable/disable based on latest status
                     updateAttendanceButtons();
                 }
             }
@@ -343,6 +324,11 @@
                 if (user) {
                     userId = user.uid;
                     userIdDisplay.textContent = userId;
+
+                    if (ADMIN_UIDS.includes(user.uid)) {
+                        adminLinkBtn.classList.remove('hidden');
+                    }
+
                     loaderScreen.style.display = 'none';
                     mainApp.classList.remove('hidden');
                     setupLocationListener();
