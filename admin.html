@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Manajemen Database</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+        }
+        #loader { border: 5px solid #f3f3f3; border-top: 5px solid #4f46e5; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { @apply bg-gray-200 dark:bg-gray-700; }
+        ::-webkit-scrollbar-thumb { @apply bg-gray-400 dark:bg-gray-500 rounded-lg; }
+        ::-webkit-scrollbar-thumb:hover { @apply bg-gray-500 dark:bg-gray-400; }
+        .status-hadir { background-color: #dcfce7; color: #166534; }
+        .dark .status-hadir { background-color: #166534; color: #dcfce7;}
+        .status-selesai { background-color: #e5e7eb; color: #374151; }
+        .dark .status-selesai { background-color: #374151; color: #e5e7eb;}
+    </style>
+</head>
+<body class="antialiased bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200 transition-colors duration-300">
+
+    <!-- Tampilan Loading atau Akses Ditolak -->
+    <div id="auth-screen" class="fixed inset-0 bg-gray-100 dark:bg-gray-900 flex flex-col justify-center items-center p-4 text-center z-50">
+        <div id="loader"></div>
+        <p id="auth-text" class="mt-4 text-gray-600 dark:text-gray-300">Mengautentikasi & memverifikasi akses admin...</p>
+    </div>
+
+    <!-- Container Utama -->
+    <div id="admin-app" class="container mx-auto p-4 md:p-8 max-w-7xl hidden">
+        <header class="mb-8 md:flex justify-between items-center">
+            <div>
+                <h1 class="text-3xl md:text-4xl font-bold text-gray-900 dark:text-white">Admin Dashboard Absensi</h1>
+                <p class="text-gray-600 dark:text-gray-400 mt-2">Lihat status dan riwayat absensi semua pengguna.</p>
+            </div>
+            <div class="mt-4 md:mt-0 text-sm text-right">
+                <p>Status: <span class="font-semibold text-indigo-600 dark:text-indigo-400">Admin</span></p>
+                <p>Admin ID: <span id="adminIdDisplay" class="text-gray-500 dark:text-gray-400 break-all">-</span></p>
+            </div>
+        </header>
+
+        <main class="space-y-8">
+            <!-- Bagian Riwayat Absensi -->
+            <section>
+                <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center gap-4">
+                    <label for="date-picker" class="font-semibold">Tampilkan data absensi tanggal:</label>
+                    <input type="date" id="date-picker" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+                    <button id="user-db-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300">Database User</button>
+                    <button id="export-csv-btn" class="ml-auto bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-4 rounded-lg transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed">
+                        Export Absensi
+                    </button>
+                </div>
+                <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-2 sm:p-5 rounded-xl shadow-md">
+                    <h2 id="table-title" class="text-xl font-bold mb-4">Memuat data...</h2>
+                    <div class="overflow-x-auto">
+                        <table id="attendance-table" class="min-w-full text-sm text-left text-gray-500 dark:text-gray-400">
+                            <thead class="text-xs text-gray-700 uppercase bg-gray-100 dark:bg-gray-700 dark:text-gray-400">
+                                <tr>
+                                    <th scope="col" class="py-3 px-6">Nama</th>
+                                    <th scope="col" class="py-3 px-6">User ID</th>
+                                    <th scope="col" class="py-3 px-6">Status</th>
+                                    <th scope="col" class="py-3 px-6">Clock In</th>
+                                    <th scope="col" class="py-3 px-6">Lokasi In</th>
+                                    <th scope="col" class="py-3 px-6">Clock Out</th>
+                                    <th scope="col" class="py-3 px-6">Lokasi Out</th>
+                                </tr>
+                            </thead>
+                            <tbody id="attendanceTableBody">
+                               <tr><td colspan="7" class="text-center p-8">Silakan pilih tanggal untuk melihat data.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <!-- Modal Database User -->
+    <div id="user-db-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex justify-center items-center p-4 z-40">
+        <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold">Database Pengguna</h3>
+                <button id="close-user-db-btn" class="text-gray-400 hover:text-gray-800 dark:hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-4 overflow-y-auto space-y-6">
+                <!-- Fitur Impor -->
+                <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-4 rounded-lg">
+                    <h4 class="text-lg font-semibold mb-3">Impor Database</h4>
+                     <div class="md:flex items-center gap-4 space-y-4 md:space-y-0">
+                        <button id="download-template-btn" class="w-full md:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Download Template</button>
+                        <div>
+                            <label for="csv-file-input" class="block text-sm font-medium">Impor Pengguna dari CSV (separator ';')</label>
+                            <input type="file" id="csv-file-input" accept=".csv" class="mt-1 block w-full text-sm text-gray-500 dark:text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 dark:file:bg-indigo-900/50 file:text-indigo-700 dark:file:text-indigo-300 hover:file:bg-indigo-100 dark:hover:file:bg-indigo-800/50"/>
+                        </div>
+                    </div>
+                </div>
+                <!-- Daftar Pengguna -->
+                <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 p-4 rounded-lg">
+                     <h4 class="text-lg font-semibold mb-3">Daftar Pengguna Terdaftar</h4>
+                     <div id="user-profiles-container" class="max-h-[45vh] overflow-auto"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Preview CSV -->
+    <div id="csv-preview-modal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-80 flex justify-center items-center p-4 z-50">
+        <div class="bg-white border border-gray-200 dark:bg-gray-800 dark:border-gray-700 rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div class="p-4 border-b dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-bold">Preview Data Impor</h3>
+                <button id="close-preview-btn" class="text-gray-400 hover:text-gray-800 dark:hover:text-white text-3xl leading-none">&times;</button>
+            </div>
+            <div class="p-4 overflow-auto">
+                <p class="mb-4 text-sm">Berikut adalah data yang terbaca dari file CSV. Pastikan semua kolom sudah benar sebelum melakukan impor. <strong class="text-red-600">Data yang sudah ada dengan User ID yang sama akan ditimpa.</strong></p>
+                <div id="preview-table-container" class="max-h-[60vh] overflow-auto"></div>
+            </div>
+            <div class="p-4 border-t dark:border-gray-700 flex justify-end gap-4">
+                <button id="cancel-import-btn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">Batal</button>
+                <button id="confirm-import-btn" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg">Impor Sekarang</button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, collectionGroup, onSnapshot, query, where, setLogLevel, getDocs, writeBatch, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ... Sisa JavaScript ...
+        const firebaseConfig = {
+            apiKey: "AIzaSyD4kZwlKC8oe1CPZ0ZveSBZK3Xjuv8qdfM",
+            authDomain: "absensi-online-de559.firebaseapp.com",
+            projectId: "absensi-online-de559",
+            storageBucket: "absensi-online-de559.firebasestorage.app",
+            messagingSenderId: "65499530399",
+            appId: "1:65499530399:web:2e4d640ecb509fc25a0eaa",
+            measurementId: "G-R81MPVMN5F"
+        };
+        const ADMIN_UIDS = [ "66WLmk7CBMaRnUBp0BCpLgZscj83", "6xsgaIwJ92WcWwkd4bbNRvxTv1G2" ];
+        
+        const authScreen = document.getElementById('auth-screen'), loader = document.getElementById('loader'), authText = document.getElementById('auth-text');
+        const adminApp = document.getElementById('admin-app'), adminIdDisplay = document.getElementById('adminIdDisplay');
+        const datePicker = document.getElementById('date-picker'), tableTitle = document.getElementById('table-title'), attendanceTableBody = document.getElementById('attendanceTableBody');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+        const userDbBtn = document.getElementById('user-db-btn'), userDbModal = document.getElementById('user-db-modal'), closeUserDbBtn = document.getElementById('close-user-db-btn');
+        const downloadTemplateBtn = document.getElementById('download-template-btn'), csvFileInput = document.getElementById('csv-file-input');
+        const csvPreviewModal = document.getElementById('csv-preview-modal'), closePreviewBtn = document.getElementById('close-preview-btn'), previewTableContainer = document.getElementById('preview-table-container');
+        const cancelImportBtn = document.getElementById('cancel-import-btn'), confirmImportBtn = document.getElementById('confirm-import-btn');
+        const userProfilesContainer = document.getElementById('user-profiles-container');
+
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
+            authText.innerHTML = '<span class="text-red-500 font-bold">Error: Konfigurasi Firebase tidak ditemukan!</span>';
+            loader.style.display = 'none';
+        } else {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            setLogLevel('debug');
+            
+            let attendanceListener = null, userProfileListener = null;
+            let currentAttendanceRecords = [], userProfiles = new Map(), parsedCsvData = [];
+
+            function downloadFile(filename, content) {
+                const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+                const link = document.createElement("a");
+                const url = URL.createObjectURL(blob);
+                link.setAttribute("href", url);
+                link.setAttribute("download", filename);
+                document.body.appendChild(link); link.click(); document.body.removeChild(link);
+            }
+            downloadTemplateBtn.addEventListener('click', () => {
+                const templateContent = "userId;nama;kelas;prodi;noHp;email\nGantiDenganUserId;Nama Lengkap;Kelas A;Prodi ABC;08123456789;email@example.com\n";
+                downloadFile('template_database_pengguna.csv', templateContent);
+            });
+            csvFileInput.addEventListener('change', (e) => {
+                if (!e.target.files[0]) return;
+                Papa.parse(e.target.files[0], { header: true, delimiter: ";", skipEmptyLines: true, complete: (res) => { parsedCsvData = res.data; displayPreview(res.data, res.meta.fields); }, error: (err) => alert("Gagal: " + err.message) });
+                e.target.value = '';
+            });
+            function displayPreview(data, headers) {
+                let table = `<table class="min-w-full text-sm"><thead class="bg-gray-200 dark:bg-gray-700"><tr>${headers.map(h => `<th class="p-2 text-left">${h}</th>`).join('')}</tr></thead><tbody>`;
+                data.forEach(row => { table += `<tr class="border-b dark:border-gray-700">${headers.map(h => `<td class="p-2 break-all">${row[h] || ''}</td>`).join('')}</tr>`; });
+                table += `</tbody></table>`;
+                previewTableContainer.innerHTML = table;
+                csvPreviewModal.classList.remove('hidden');
+            }
+            async function importDataToFirestore() {
+                if(parsedCsvData.length === 0) { alert("Tidak ada data."); return; }
+                confirmImportBtn.disabled = true; confirmImportBtn.textContent = "Mengimpor...";
+                const batch = writeBatch(db);
+                const collectionPath = `artifacts/${firebaseConfig.projectId}/public/data/user_profiles`;
+                parsedCsvData.forEach(user => { if (user.userId) { batch.set(doc(db, collectionPath, user.userId), { nama: user.nama||'', kelas:user.kelas||'', prodi:user.prodi||'', noHp:user.noHp||'', email:user.email||'' }); } });
+                try { await batch.commit(); alert(`Berhasil: ${parsedCsvData.length} data diimpor!`); closePreviewModal(); } catch (e) { alert("Gagal: " + e.message); } 
+                finally { confirmImportBtn.disabled = false; confirmImportBtn.textContent = "Impor Sekarang"; }
+            }
+            function closePreviewModal() { csvPreviewModal.classList.add('hidden'); parsedCsvData = []; }
+            closePreviewBtn.addEventListener('click', closePreviewModal); cancelImportBtn.addEventListener('click', closePreviewModal); confirmImportBtn.addEventListener('click', importDataToFirestore);
+            
+            function renderUserProfilesTable() {
+                let table = `<table class="min-w-full text-sm"><thead class="bg-gray-200 dark:bg-gray-700"><tr>
+                    <th class="p-2 text-left">User ID</th><th class="p-2 text-left">Nama</th><th class="p-2 text-left">Kelas</th><th class="p-2 text-left">Prodi</th>
+                    <th class="p-2 text-left">No HP</th><th class="p-2 text-left">Email</th></tr></thead><tbody>`;
+                if(userProfiles.size === 0) {
+                    table += `<tr><td colspan="6" class="p-4 text-center">Belum ada data pengguna.</td></tr>`;
+                } else {
+                    const sortedProfiles = [...userProfiles.entries()].sort((a, b) => a[1].nama.localeCompare(b[1].nama));
+                    sortedProfiles.forEach(([userId, profile]) => {
+                        table += `<tr class="border-b dark:border-gray-700">
+                            <td class="p-2 break-all">${userId}</td><td class="p-2">${profile.nama}</td><td class="p-2">${profile.kelas}</td>
+                            <td class="p-2">${profile.prodi}</td><td class="p-2">${profile.noHp}</td><td class="p-2">${profile.email}</td></tr>`;
+                    });
+                }
+                table += `</tbody></table>`;
+                userProfilesContainer.innerHTML = table;
+            }
+
+            function listenToUserProfiles() {
+                 if (userProfileListener) userProfileListener();
+                 const collectionPath = `artifacts/${firebaseConfig.projectId}/public/data/user_profiles`;
+                 userProfileListener = onSnapshot(query(collection(db, collectionPath)), (snapshot) => {
+                    userProfiles.clear();
+                    snapshot.forEach(doc => userProfiles.set(doc.id, doc.data()));
+                    renderTable();
+                    renderUserProfilesTable();
+                 });
+            }
+
+            function renderTable() {
+                attendanceTableBody.innerHTML = '';
+                if (currentAttendanceRecords.length === 0) { attendanceTableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8">Tidak ada data.</td></tr>`; exportCsvBtn.disabled = true; return; }
+                exportCsvBtn.disabled = false;
+                currentAttendanceRecords.sort((a,b) => (a.clockInTime?.toMillis() || 0) - (b.clockInTime?.toMillis() || 0));
+                currentAttendanceRecords.forEach(data => {
+                    const row = document.createElement('tr');
+                    row.className = 'border-b hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-600';
+                    const profile = userProfiles.get(data.userId) || { nama: 'N/A' };
+                    const status = data.clockOutTime ? "Selesai" : "Hadir";
+                    const statusClass = data.clockOutTime ? "status-selesai" : "status-hadir";
+                    const clockInTime = data.clockInTime ? data.clockInTime.toDate().toLocaleTimeString('id-ID') : '-';
+                    const clockOutTime = data.clockOutTime ? data.clockOutTime.toDate().toLocaleTimeString('id-ID') : '-';
+                    const clockInLoc = data.clockInLocation ? `${data.clockInLocation.latitude.toFixed(5)}, ${data.clockInLocation.longitude.toFixed(5)}` : '-';
+                    const clockOutLoc = data.clockOutLocation ? `${data.clockOutLocation.latitude.toFixed(5)}, ${data.clockOutLocation.longitude.toFixed(5)}` : '-';
+                    row.innerHTML = `<td class="py-4 px-6 font-semibold">${profile.nama}</td><td class="py-4 px-6 font-medium text-gray-900 dark:text-white break-all">${data.userId}</td>
+                        <td class="py-4 px-6"><span class="px-2 py-1 text-xs font-medium rounded-full ${statusClass}">${status}</span></td>
+                        <td class="py-4 px-6 text-green-600 dark:text-green-400 font-semibold">${clockInTime}</td><td class="py-4 px-6">${clockInLoc}</td>
+                        <td class="py-4 px-6 text-red-600 dark:text-red-400 font-semibold">${clockOutTime}</td><td class="py-4 px-6">${clockOutLoc}</td>`;
+                    attendanceTableBody.appendChild(row);
+                });
+            }
+
+            function fetchAttendanceData(dateString) {
+                tableTitle.textContent = `Data Absensi: ${dateString}`;
+                attendanceTableBody.innerHTML = '<tr><td colspan="7" class="text-center p-8">Memuat...</td></tr>';
+                if (attendanceListener) attendanceListener(); 
+                const q = query(collectionGroup(db, 'attendance'), where("date", "==", dateString));
+                attendanceListener = onSnapshot(q, (snapshot) => { currentAttendanceRecords = []; snapshot.forEach(doc => currentAttendanceRecords.push(doc.data())); renderTable(); }, 
+                (error) => { attendanceTableBody.innerHTML = `<tr><td colspan="7" class="text-center p-8 text-red-500">Error: ${error.message}<br><small>Pastikan indeks Firestore sudah dibuat.</small></td></tr>`; });
+            }
+            
+            function exportAttendanceToCsv(filename, rows) {
+                const header = ["User ID", "Nama", "Tanggal", "Status", "Waktu Clock In", "Lokasi Clock In", "Waktu Clock Out", "Lokasi Clock Out"];
+                const data = rows.map(row => {
+                     const profile = userProfiles.get(row.userId) || { nama: 'N/A' };
+                     const status = row.clockOutTime ? "Selesai" : "Hadir";
+                     return [row.userId, profile.nama, row.date, status, row.clockInTime?.toDate().toLocaleString('id-ID')||'', `"${row.clockInLocation?.latitude}, ${row.clockInLocation?.longitude}"`||'', row.clockOutTime?.toDate().toLocaleString('id-ID')||'', `"${row.clockOutLocation?.latitude}, ${row.clockOutLocation?.longitude}"`||''];
+                });
+                downloadFile(filename, [header, ...data].map(e => e.join(";")).join("\n"));
+            }
+
+            exportCsvBtn.addEventListener('click', () => {
+                if(currentAttendanceRecords.length > 0) { exportAttendanceToCsv(`absensi_${datePicker.value}.csv`, currentAttendanceRecords); } 
+                else { alert("Tidak ada data."); }
+            });
+            datePicker.addEventListener('change', (e) => fetchAttendanceData(e.target.value));
+            userDbBtn.addEventListener('click', () => userDbModal.classList.remove('hidden'));
+            closeUserDbBtn.addEventListener('click', () => userDbModal.classList.add('hidden'));
+            
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    if (ADMIN_UIDS.includes(user.uid)) {
+                        authScreen.style.display = 'none';
+                        adminApp.classList.remove('hidden');
+                        adminIdDisplay.textContent = user.uid;
+                        listenToUserProfiles(); 
+                        const today = new Date().toISOString().slice(0,10);
+                        datePicker.value = today;
+                        fetchAttendanceData(today);
+                    } else {
+                        loader.style.display = 'none';
+                        authText.innerHTML = `<h2 class="text-2xl font-bold text-red-600">Akses Ditolak</h2><p class="mt-2">ID Anda (${user.uid}) tidak terdaftar.</p>`;
+                    }
+                } else {
+                    try { await signInAnonymously(auth); } catch (error) {
+                         loader.style.display = 'none';
+                         authText.innerHTML = `<p class='text-red-500'>Gagal Autentikasi: ${error.message}</p>`;
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
