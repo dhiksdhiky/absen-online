@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Aplikasi Absensi Real-time (Geofencing)</title>
+    
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f4f7f6; }
+        #loader { border: 5px solid #f3f3f3; border-top: 5px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #888; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+        .disabled-btn {
+            background-color: #9ca3af; /* gray-400 */
+            cursor: not-allowed;
+        }
+        .disabled-btn:hover {
+            background-color: #9ca3af;
+        }
+    </style>
+</head>
+<body class="antialiased text-gray-800">
+
+    <!-- Container Utama -->
+    <div id="app" class="container mx-auto p-4 md:p-8 max-w-4xl hidden">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Aplikasi Absensi Real-time</h1>
+            <p class="text-gray-600 mt-2">Fitur: Geofencing Aktif</p>
+        </header>
+
+        <main class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Informasi Pengguna & Lokasi -->
+                <div class="bg-white p-5 rounded-xl shadow-md border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-700 border-b pb-2 mb-3">Informasi & Status</h2>
+                    <div class="text-sm space-y-3">
+                        <div>
+                            <p class="font-medium">User ID:</p>
+                            <p id="userIdDisplay" class="text-gray-600 bg-gray-100 p-2 rounded-md break-words">-</p>
+                        </div>
+                        <div id="locationWrapper">
+                            <p class="font-medium">Lokasi Anda:</p>
+                            <div id="locationDisplay" class="text-gray-600 space-y-1 mb-2">-</div>
+                        </div>
+                        <div id="geofenceStatus" class="p-3 rounded-lg text-center">
+                            <p class="font-semibold">Memeriksa Jarak...</p>
+                        </div>
+                    </div>
+                     <button id="refreshLocationBtn" class="mt-4 w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition duration-300 text-sm">Refresh Lokasi</button>
+                </div>
+                <!-- Aksi Absensi -->
+                <div class="bg-white p-5 rounded-xl shadow-md border border-gray-200">
+                    <h2 class="text-lg font-semibold text-gray-700 border-b pb-2 mb-3">Aksi Absensi Hari Ini</h2>
+                    <div id="statusMessage" class="text-center text-sm text-gray-600 mb-4 p-3 bg-gray-50 rounded-md">-</div>
+                    <div class="space-y-3">
+                         <button id="clockInBtn" class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105">CLOCK IN</button>
+                         <button id="clockOutBtn" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-3 px-4 rounded-lg transition duration-300 transform hover:scale-105">CLOCK OUT</button>
+                    </div>
+                </div>
+            </div>
+            <div class="lg:col-span-2 bg-white p-5 rounded-xl shadow-md border border-gray-200">
+                 <h2 class="text-xl font-bold text-gray-800 mb-4">Riwayat Absensi Anda</h2>
+                 <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm text-left text-gray-500">
+                        <thead class="text-xs text-gray-700 uppercase bg-gray-100">
+                            <tr>
+                                <th scope="col" class="py-3 px-6">Tanggal</th>
+                                <th scope="col" class="py-3 px-6">Clock In</th>
+                                <th scope="col" class="py-3 px-6">Lokasi In</th>
+                                <th scope="col" class="py-3 px-6">Clock Out</th>
+                                <th scope="col" class="py-3 px-6">Lokasi Out</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody">
+                           <tr><td colspan="5" class="text-center p-4">Memuat riwayat...</td></tr>
+                        </tbody>
+                    </table>
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Loader Screen -->
+    <div id="loader-screen" class="fixed inset-0 bg-gray-100 flex flex-col justify-center items-center p-4 text-center">
+        <div id="loader"></div>
+        <p id="loader-text" class="mt-4 text-gray-600">Mengautentikasi & memuat data...</p>
+    </div>
+
+    <!-- Custom Modal for Messages -->
+    <div id="messageModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+            <p id="modalMessage" class="mb-4 text-gray-700">Pesan akan tampil di sini.</p>
+            <button id="closeModalBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-6 rounded-lg transition duration-300">Tutup</button>
+        </div>
+    </div>
+
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, updateDoc, collection, onSnapshot, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // ===================================================================================
+        // TODO: GANTI DENGAN KONFIGURASI FIREBASE ANDA
+        // ===================================================================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyD4kZwlKC8oe1CPZ0ZveSBZK3Xjuv8qdfM",
+            authDomain: "absensi-online-de559.firebaseapp.com",
+            projectId: "absensi-online-de559",
+            storageBucket: "absensi-online-de559.firebasestorage.app",
+            messagingSenderId: "65499530399",
+            appId: "1:65499530399:web:2e4d640ecb509fc25a0eaa",
+            measurementId: "G-R81MPVMN5F"
+        };
+
+        // ===================================================================================
+        // PENGATURAN GEOFENCING
+        // Ganti dengan koordinat lokasi kantor/area absensi Anda.
+        // Anda bisa mendapatkan koordinat dari Google Maps.
+        // ===================================================================================
+        const OFFICE_LATITUDE = -6.264604376486193; // Contoh: Monas, Jakarta
+        const OFFICE_LONGITUDE = 106.73362422560874; // Contoh: Monas, Jakarta
+        const MAX_DISTANCE_METERS = 100; // Radius maksimal dalam meter
+
+        // --- Elemen DOM ---
+        const loaderScreen = document.getElementById('loader-screen');
+        const loaderText = document.getElementById('loader-text');
+        const mainApp = document.getElementById('app');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const locationDisplay = document.getElementById('locationDisplay');
+        const geofenceStatus = document.getElementById('geofenceStatus');
+        const clockInBtn = document.getElementById('clockInBtn');
+        const clockOutBtn = document.getElementById('clockOutBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const historyTableBody = document.getElementById('historyTableBody');
+        const refreshLocationBtn = document.getElementById('refreshLocationBtn');
+        const messageModal = document.getElementById('messageModal');
+        const modalMessage = document.getElementById('modalMessage');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        
+        if (!firebaseConfig || !firebaseConfig.apiKey) {
+            loaderText.innerHTML = '<span class="text-red-500 font-bold">Error: Konfigurasi Firebase tidak ditemukan!</span><br>Silakan salin konfigurasi dari Firebase Console dan tempel ke dalam file HTML ini.';
+        } else {
+            const app = initializeApp(firebaseConfig);
+            const auth = getAuth(app);
+            const db = getFirestore(app);
+            setLogLevel('debug');
+            const appId = firebaseConfig.projectId;
+
+            let userId = null;
+            let currentLocation = null;
+            let todayAttendance = null;
+            let attendanceListener = null; 
+            let isWithinGeofence = false;
+
+            function showModal(message) {
+                modalMessage.textContent = message;
+                messageModal.classList.remove('hidden');
+            }
+
+            // Fungsi untuk menghitung jarak antara dua titik koordinat (Haversine formula)
+            function calculateDistance(lat1, lon1, lat2, lon2) {
+                const R = 6371e3; // Radius bumi dalam meter
+                const φ1 = lat1 * Math.PI/180;
+                const φ2 = lat2 * Math.PI/180;
+                const Δφ = (lat2-lat1) * Math.PI/180;
+                const Δλ = (lon2-lon1) * Math.PI/180;
+
+                const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                          Math.cos(φ1) * Math.cos(φ2) *
+                          Math.sin(Δλ/2) * Math.sin(Δλ/2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+                return R * c; // dalam meter
+            }
+            
+            function checkGeofence() {
+                if (!currentLocation) {
+                    geofenceStatus.innerHTML = `<p class="font-semibold text-red-600">Lokasi tidak ditemukan</p>`;
+                    isWithinGeofence = false;
+                    updateAttendanceButtons();
+                    return;
+                }
+
+                const distance = calculateDistance(
+                    currentLocation.latitude, currentLocation.longitude,
+                    OFFICE_LATITUDE, OFFICE_LONGITUDE
+                );
+
+                if (distance <= MAX_DISTANCE_METERS) {
+                    geofenceStatus.className = 'p-3 rounded-lg text-center bg-green-100 text-green-800';
+                    geofenceStatus.innerHTML = `<p class="font-semibold">Anda berada di dalam area absensi.</p><p class="text-xs">Jarak: ${distance.toFixed(0)} meter dari kantor.</p>`;
+                    isWithinGeofence = true;
+                } else {
+                    geofenceStatus.className = 'p-3 rounded-lg text-center bg-red-100 text-red-800';
+                    geofenceStatus.innerHTML = `<p class="font-semibold">Anda berada di luar area absensi!</p><p class="text-xs">Jarak: ${distance.toFixed(0)} meter dari kantor.</p>`;
+                    isWithinGeofence = false;
+                }
+                updateAttendanceButtons();
+            }
+
+            function updateAttendanceButtons() {
+                const canClockIn = isWithinGeofence && !todayAttendance;
+                const canClockOut = isWithinGeofence && todayAttendance && !todayAttendance.clockOutTime;
+
+                clockInBtn.disabled = !canClockIn;
+                clockOutBtn.disabled = !canClockOut;
+
+                [clockInBtn, clockOutBtn].forEach(btn => {
+                    if (btn.disabled) {
+                        btn.classList.add('disabled-btn');
+                    } else {
+                        btn.classList.remove('disabled-btn');
+                    }
+                });
+            }
+
+            function setupLocationListener() {
+                if (!navigator.geolocation) {
+                    locationDisplay.innerHTML = "<p class='text-red-500'>Geolocation tidak didukung oleh browser ini.</p>";
+                    checkGeofence();
+                    return;
+                }
+                function success(position) {
+                    currentLocation = { latitude: position.coords.latitude, longitude: position.coords.longitude, accuracy: position.coords.accuracy };
+                    locationDisplay.innerHTML = `<p><strong>Lat:</strong> ${currentLocation.latitude.toFixed(5)}</p><p><strong>Lon:</strong> ${currentLocation.longitude.toFixed(5)}</p><p><strong>Akurasi:</strong> ${currentLocation.accuracy.toFixed(0)} m</p>`;
+                    checkGeofence();
+                }
+                function error() {
+                    locationDisplay.innerHTML = "<p class='text-red-500 font-semibold'>Tidak dapat mengambil lokasi.</p><p class='text-xs'>Pastikan izin lokasi telah diberikan.</p>";
+                    currentLocation = null;
+                    checkGeofence();
+                }
+                navigator.geolocation.watchPosition(success, error, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            }
+            
+            refreshLocationBtn.onclick = setupLocationListener;
+
+            function updateUIAfterDataFetch() {
+                const today = new Date();
+                statusMessage.textContent = `Status untuk: ${today.toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+
+                if (todayAttendance) {
+                    if (todayAttendance.clockOutTime) {
+                        statusMessage.innerHTML += `<br><strong class="text-green-600">Absensi hari ini sudah lengkap.</strong>`;
+                        clockInBtn.style.display = 'block';
+                    } else {
+                        const clockInDate = todayAttendance.clockInTime.toDate();
+                        statusMessage.innerHTML += `<br><span class="text-blue-600">Anda sudah Clock In pada: <strong>${clockInDate.toLocaleTimeString('id-ID')}</strong></span>`;
+                        clockInBtn.style.display = 'none';
+                        clockOutBtn.style.display = 'block';
+                    }
+                } else {
+                    statusMessage.innerHTML += `<br><span class="text-yellow-600">Anda belum melakukan absensi hari ini.</span>`;
+                    clockInBtn.style.display = 'block';
+                    clockOutBtn.style.display = 'none';
+                }
+                updateAttendanceButtons();
+            }
+            
+            function listenToAttendance(uid) {
+                 if (attendanceListener) attendanceListener(); 
+                const collectionPath = `artifacts/${appId}/users/${uid}/attendance`;
+                const q = query(collection(db, collectionPath));
+                
+                attendanceListener = onSnapshot(q, (querySnapshot) => {
+                    const allAttendance = [];
+                    querySnapshot.forEach((doc) => allAttendance.push({ id: doc.id, ...doc.data() }));
+                    allAttendance.sort((a, b) => b.id.localeCompare(a.id));
+                    historyTableBody.innerHTML = ''; 
+                    if (allAttendance.length === 0) {
+                         historyTableBody.innerHTML = '<tr><td colspan="5" class="text-center p-4">Belum ada riwayat absensi.</td></tr>';
+                    } else {
+                        allAttendance.forEach(data => {
+                            const row = document.createElement('tr');
+                            row.className = 'bg-white border-b';
+                            const clockInTime = data.clockInTime ? data.clockInTime.toDate().toLocaleTimeString('id-ID') : '-';
+                            const clockOutTime = data.clockOutTime ? data.clockOutTime.toDate().toLocaleTimeString('id-ID') : '-';
+                            const clockInLoc = data.clockInLocation ? `${data.clockInLocation.latitude.toFixed(3)}, ${data.clockInLocation.longitude.toFixed(3)}` : '-';
+                            const clockOutLoc = data.clockOutLocation ? `${data.clockOutLocation.latitude.toFixed(3)}, ${data.clockOutLocation.longitude.toFixed(3)}` : '-';
+                            row.innerHTML = `<td class="py-4 px-6 font-medium text-gray-900">${data.id}</td><td class="py-4 px-6 text-green-600 font-semibold">${clockInTime}</td><td class="py-4 px-6">${clockInLoc}</td><td class="py-4 px-6 text-red-600 font-semibold">${clockOutTime}</td><td class="py-4 px-6">${clockOutLoc}</td>`;
+                            historyTableBody.appendChild(row);
+                        });
+                    }
+                    const todayDateString = new Date().toISOString().slice(0, 10);
+                    todayAttendance = allAttendance.find(att => att.id === todayDateString) || null;
+                    updateUIAfterDataFetch();
+                }, (error) => {
+                    console.error("Error pada listener Firestore: ", error);
+                    showModal(`Error: Tidak bisa membaca data dari database. Cek 'Rules' di Firestore Anda. Error: ${error.message}`);
+                });
+            }
+
+            async function performClock(action) {
+                const btn = action === 'in' ? clockInBtn : clockOutBtn;
+                const originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'PROSES...';
+                
+                const todayDateString = new Date().toISOString().slice(0, 10);
+                const attendanceRef = doc(db, `artifacts/${appId}/users/${userId}/attendance`, todayDateString);
+                
+                try {
+                    const data = {
+                        userId: userId,
+                        date: todayDateString,
+                        [`clock${action === 'in' ? 'In' : 'Out'}Time`]: serverTimestamp(),
+                        [`clock${action === 'in' ? 'In' : 'Out'}Location`]: { latitude: currentLocation.latitude, longitude: currentLocation.longitude }
+                    };
+
+                    if (action === 'in') {
+                        await setDoc(attendanceRef, { ...data, clockOutTime: null, clockOutLocation: null });
+                    } else {
+                        await updateDoc(attendanceRef, data);
+                    }
+                    showModal(`Clock ${action === 'in' ? 'In' : 'Out'} berhasil!`);
+                } catch (error) {
+                    showModal(`Terjadi kesalahan saat Clock ${action === 'in' ? 'In' : 'Out'}: ${error.message}`);
+                } finally {
+                    btn.textContent = originalText;
+                    // Re-enable/disable based on latest status
+                    updateAttendanceButtons();
+                }
+            }
+
+            clockInBtn.addEventListener('click', () => performClock('in'));
+            clockOutBtn.addEventListener('click', () => performClock('out'));
+            closeModalBtn.addEventListener('click', () => { messageModal.classList.add('hidden'); });
+
+            onAuthStateChanged(auth, async (user) => {
+                if (user) {
+                    userId = user.uid;
+                    userIdDisplay.textContent = userId;
+                    loaderScreen.style.display = 'none';
+                    mainApp.classList.remove('hidden');
+                    setupLocationListener();
+                    listenToAttendance(userId);
+                } else {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (error) {
+                        console.error("Login anonim gagal: ", error);
+                        loaderText.innerHTML = `<p class='text-red-500'>Gagal melakukan autentikasi. Pastikan login anonim aktif di Firebase Console. Error: ${error.message}</p>`;
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
